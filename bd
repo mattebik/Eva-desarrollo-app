@@ -1,0 +1,254 @@
+ALTER SESSION SET "_ORACLE_SCRIPT"=TRUE;
+SET SERVEROUTPUT ON;
+GRANT CREATE TABLE TO SYSTEM;
+GRANT CREATE SEQUENCE TO SYSTEM;
+-----------------------------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE crear_tablas
+IS 
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE TABLE bitacora(
+                       id_bitacora NUMBER PRIMARY KEY,
+                       accion VARCHAR2(255),
+                       fecha DATE)';
+    DBMS_OUTPUT.PUT_LINE('La tabla "bitacora" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE seq_bitacora
+                       START WITH 1
+                       INCREMENT BY 1
+                       NOCACHE
+                       NOCYCLE';
+    DBMS_OUTPUT.PUT_LINE('La secuencia para "bitacora" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE login(
+                       id_login NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                       usuario VARCHAR2(100),
+                       contraseña VARCHAR2(100))';
+    DBMS_OUTPUT.PUT_LINE('La tabla "login" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE proveedor(
+                       id_proveedor NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                       nombre VARCHAR2(200),
+                       dirección VARCHAR2(200))';                
+    DBMS_OUTPUT.PUT_LINE('La tabla "proveedor" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE productos(
+                       id_producto NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                       tipo VARCHAR2(120),
+                       nombre VARCHAR2(120),
+                       precio NUMBER,
+                       id_proveedor NUMBER,
+                       cantidad NUMBER,
+                       CONSTRAINT fk_proveedor
+                       FOREIGN KEY (id_proveedor)
+                       REFERENCES proveedor(id_proveedor)
+                       ON DELETE CASCADE)';                 
+    DBMS_OUTPUT.PUT_LINE('La tabla "productos" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE usuario(
+                      id_usuario NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                      nombre VARCHAR2(120),
+                      apellido VARCHAR2(120),
+                      RUT VARCHAR2(50),
+                      mail VARCHAR2(50),
+                      telefono NUMBER)';
+    DBMS_OUTPUT.PUT_LINE('La tabla "usuario" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE boletas(
+                       id_boletas NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                       fecha DATE,
+                       codigo NUMBER,
+                       id_usuario NUMBER,
+                       CONSTRAINT fk_usuario
+                       FOREIGN KEY (id_usuario)
+                       REFERENCES usuario(id_usuario)
+                       ON DELETE CASCADE)';                 
+    DBMS_OUTPUT.PUT_LINE('La tabla "boletas" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE delivery(
+                       id_delivery NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                       precio NUMBER,
+                       entrega_tipo VARCHAR2(50),
+                       fecha DATE,
+                       hora VARCHAR2(50),
+                       hora_llegada VARCHAR2(50))';  
+                       
+    DBMS_OUTPUT.PUT_LINE('La tabla "delivery" ha sido creada exitosamente');
+    
+    EXECUTE IMMEDIATE 'CREATE TABLE venta(
+                       id_venta NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                       precio NUMBER,
+                       id_boletas NUMBER,
+                       id_producto NUMBER,
+                       CONSTRAINT fk_boletas
+                       FOREIGN KEY (id_boletas)
+                       REFERENCES boletas(id_boletas)
+                       ON DELETE CASCADE,
+                       CONSTRAINT fk_producto
+                       FOREIGN KEY (id_producto)
+                       REFERENCES productos(id_producto)
+                       ON DELETE CASCADE)';
+    DBMS_OUTPUT.PUT_LINE('La tabla "venta" ha sido creada exitosamente');
+END crear_tablas;
+
+EXECUTE crear_tablas;
+---------------------------------------------------------------------------------------------------------------------------------------------------
+DROP TABLE bitacora;
+DROP SEQUENCE seq_bitacora;
+DROP TABLE login;
+DROP TABLE proveedor;
+DROP TABLE boletas;
+DROP TABLE usuario;
+DROP TABLE delivery;
+DROP TABLE venta;
+DROP TABLE productos;
+---------------------------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE TRIGGER manejo_stock
+AFTER INSERT ON venta
+FOR EACH ROW
+BEGIN
+    UPDATE productos SET cantidad = cantidad - 1
+    WHERE id_producto = :new.id_producto;
+END;
+/
+
+CREATE OR REPLACE TRIGGER ins_bitacora_producto
+AFTER INSERT OR UPDATE OR DELETE ON productos
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se ingresó el registro: ' || :NEW.nombre, SYSDATE);
+    ELSIF UPDATING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se actualizó el registro: ' || :NEW.nombre, SYSDATE);
+    ELSIF DELETING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se eliminó el registro: ' || :OLD.nombre, SYSDATE);
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER ins_bitacora_usuario
+AFTER INSERT OR UPDATE OR DELETE ON usuario
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se ingresó el USUARIO: ' || :NEW.RUT, SYSDATE);
+    ELSIF UPDATING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se actualizó el USUARIO: ' || :NEW.RUT, SYSDATE);
+    ELSIF DELETING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se eliminó el USUARIO: ' || :OLD.RUT, SYSDATE);
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER ins_bitacora_boletas
+AFTER INSERT OR UPDATE OR DELETE ON boletas
+FOR EACH ROW 
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se ingresó la boleta: ' || :NEW.codigo, SYSDATE);
+    ELSIF UPDATING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se actualizó la boleta: ' || :NEW.codigo, SYSDATE);
+    ELSIF DELETING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se eliminó la boleta: ' || :NEW.codigo, SYSDATE);
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER ins_bitacora_venta
+AFTER INSERT OR UPDATE OR DELETE ON venta
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se ingresó la venta: ' || :NEW.id_venta, SYSDATE);
+    ELSIF UPDATING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se actualizó la venta: ' || :NEW.id_venta, SYSDATE);
+    ELSIF DELETING THEN
+        INSERT INTO bitacora(id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se eliminó la venta: ' || :NEW.id_venta, SYSDATE);
+    END IF;
+END;
+/
+
+CREATE OR REPLACE TRIGGER ins_bitacora_proveedor
+AFTER INSERT OR UPDATE OR DELETE ON proveedor
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        INSERT INTO bitacora (id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se ingresó el proveedor: ' || :NEW.id_proveedor, SYSDATE);
+    ELSIF UPDATING THEN
+        INSERT INTO bitacora (id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se actualizó el proveedor: ' || :NEW.id_proveedor, SYSDATE);
+    ELSIF DELETING THEN
+        INSERT INTO bitacora (id_bitacora, accion, fecha)
+        VALUES(seq_bitacora.NEXTVAL, 'Se eliminó el proveedor: ' || :NEW.id_proveedor, SYSDATE);
+    END IF;
+END;
+/
+---------------------------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW informe_venta AS
+SELECT u.id_usuario, u.nombre , u.apellido, u.rut, 
+b.codigo, b.fecha, 
+v.precio, v.id_producto, p.nombre AS nombre_producto FROM usuario u
+LEFT JOIN boletas b ON b.id_usuario = u.id_usuario
+LEFT JOIN venta v ON v.id_boletas = b.id_boletas
+LEFT JOIN productos p ON p.id_producto = v.id_producto;
+--------------------------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE ver_informeventa
+IS 
+BEGIN
+    FOR informe IN (SELECT * FROM informe_venta) LOOP
+        DBMS_OUTPUT.PUT_LINE('ID Usuario: ' || informe.id_usuario || 
+                            ' Nombre usuario: ' || informe.nombre || ' '|| informe.apellido ||
+                            ' RUT :' || informe.rut ||
+                            ' Código boleta: ' || informe.codigo ||
+                            ' Fecha boleta: ' || informe.fecha ||
+                            ' Precio unitario producto: ' || informe.precio ||
+                            ' ID producto : ' || informe.id_producto ||
+                            ' Nombre producto: ' || informe.nombre_producto);
+    END LOOP;
+END ver_informeventa;
+
+execute ver_informeventa;
+-----------------------------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE ins_ejemplo
+IS
+BEGIN
+    INSERT INTO proveedor (nombre, dirección)
+    VALUES ('Tesoros marinos', 'Av. el mar 2345');
+    INSERT INTO proveedor (nombre, dirección)
+    VALUES ('Pan trad', 'Av molineros 4433');
+    INSERT INTO productos (tipo, nombre, precio, id_proveedor, cantidad)
+    VALUES ('entrada', 'sopa de camarón', 5000, 1, 50);
+    INSERT INTO productos (tipo, nombre, precio, id_proveedor, cantidad)
+    VALUES ('entrada', 'empanadas cocktel', 1200, 2, 50);
+    INSERT INTO usuario (nombre, apellido, RUT, mail, telefono)
+    VALUES ('Juan', 'Pérez', '12345678-9', 'juan@example.com', 123456789);
+    INSERT INTO usuario (nombre, apellido, RUT, mail, telefono)
+    VALUES ('María', 'López', '98765432-1', 'maria@example.com', 987654321);
+    INSERT INTO boletas (fecha, codigo, id_usuario)
+    VALUES (TO_DATE('2024-05-09', 'YYYY-MM-DD'), 1234, 1);
+    INSERT INTO boletas (fecha, codigo, id_usuario)
+    VALUES (TO_DATE('2024-05-08', 'YYYY-MM-DD'), 5678, 2);
+    INSERT INTO venta (precio, id_boletas, id_producto)
+    VALUES (5000, 1, 1);
+    INSERT INTO venta (precio, id_boletas, id_producto)
+    VALUES (1200, 2, 2);
+END ins_ejemplo;
+
+EXECUTE ins_ejemplo;
+---------------------------------------------------------------------------------------------------------------------------------
+select * from bitacora;
+select * from productos;
+update productos set nombre = 'empanadas de pino' where id_producto = 2;
+delete from usuario where rut = '12345678-9';
